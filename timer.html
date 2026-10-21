@@ -1,0 +1,17 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="css/style.css"><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script><title>Timer - SpeedRun Log</title></head><body>
+<div id="navbar" data-active="timer"></div>
+<main class="container"><h2>Timer</h2>
+<div class="timer-display" id="timer">00:00:00</div>
+<div class="timer-controls">
+<button onclick="startTimer()">Start</button>
+<button onclick="pauseTimer()" class="btn-secondary">Pause</button>
+<button onclick="stopTimer()" class="btn-danger">Stop</button>
+<button onclick="resetTimer()" class="btn-secondary">Reset</button></div>
+<section id="saveRunForm" style="display:none;margin-top:40px"><h3>Save this run</h3><div id="msg" class="msg"></div>
+<form onsubmit="saveRun(event)">
+<div class="form-group"><label>Activity name</label><input type="text" id="activityName" placeholder="Morning run" required></div>
+<div class="form-group"><label>Distance (km)</label><input type="number" step="0.01" min="0.01" id="distance" placeholder="5.0" required></div>
+<div class="form-group"><label>Date</label><input type="date" id="runDate" required></div>
+<div class="form-group"><label>Notes</label><textarea id="notes" rows="2"></textarea></div>
+<button type="submit">Save run</button></form></section></main>
+<script src="js/supabase.js"></script><script src="js/auth.js"></script><script src="js/app.js"></script><script src="js/nav.js"></script><script src="js/timer.js"></script><script>checkAuth(true)</script></body></html>

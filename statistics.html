@@ -1,0 +1,35 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="css/style.css"><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script><title>Statistics - SpeedRun Log</title></head><body>
+<div id="navbar" data-active="statistics"></div>
+<main class="container"><h2>Statistics</h2><div id="msg" class="msg"></div>
+<div class="stats">
+<div class="stat"><div class="label">Runs</div><div class="value" id="a">–</div></div>
+<div class="stat"><div class="label">Distance</div><div class="value" id="b">–</div></div>
+<div class="stat"><div class="label">Time</div><div class="value" id="c">–</div></div>
+<div class="stat"><div class="label">Avg pace</div><div class="value" id="d">–</div></div>
+<div class="stat"><div class="label">Best pace</div><div class="value" id="e">–</div></div>
+<div class="stat"><div class="label">Longest run</div><div class="value" id="f">–</div></div></div>
+<h3>Pace trend</h3><div id="chart"></div>
+<h3 style="margin-top:36px">By activity</h3><div id="groups"></div></main>
+<script src="js/supabase.js"></script><script src="js/auth.js"></script><script src="js/app.js"></script><script src="js/nav.js"></script>
+<script>
+(async()=>{
+if(!await checkAuth(true))return;
+const runs=await loadRuns(),best=bestRun(runs),km=sum(runs,'distance'),sec=sum(runs,'seconds');
+$('a').textContent=runs.length;
+$('b').innerHTML=km.toFixed(1)+' <small>km</small>';
+$('c').innerHTML=fmtTotal(sec);
+$('d').innerHTML=km>0?fmtPace(sec/60/km)+' <small>/km</small>':'–';
+$('e').innerHTML=best?fmtPace(best.pace)+' <small>/km</small>':'–';
+$('f').innerHTML=runs.length?Math.max(...runs.map(r=>r.distance)).toFixed(2)+' <small>km</small>':'–';
+const pts=runs.filter(r=>r.pace>0).slice(0,20).reverse();
+if(pts.length<2)$('chart').innerHTML='<p class="muted">Save at least two runs to see your pace trend.</p>';
+else{
+const lo=Math.min(...pts.map(p=>p.pace)),hi=Math.max(...pts.map(p=>p.pace)),rg=hi-lo||1;
+const xy=pts.map((p,i)=>[20+i*(560/(pts.length-1)),20+(p.pace-lo)/rg*120]);
+$('chart').innerHTML=`<svg viewBox="0 0 600 160" width="100%" role="img" aria-label="Pace trend"><polyline points="${xy.map(a=>a.join(',')).join(' ')}" fill="none" stroke="currentColor" stroke-width="2"/>${xy.map((a,i)=>`<circle cx="${a[0]}" cy="${a[1]}" r="4" fill="currentColor"><title>${esc(pts[i].name)}: ${fmtPace(pts[i].pace)} /km</title></circle>`).join('')}</svg><p class="muted">Last ${pts.length} runs, oldest to newest. Higher on the chart is faster.</p>`;
+}
+const gr={};runs.forEach(r=>{const k=r.name.trim().toLowerCase();(gr[k]=gr[k]||{name:r.name,list:[]}).list.push(r)});
+const rows=Object.values(gr).sort((x,y)=>y.list.length-x.list.length);
+$('groups').innerHTML=rows.length?`<div class="table-wrap"><table><thead><tr><th>Activity</th><th>Runs</th><th>Distance</th><th>Best pace</th></tr></thead><tbody>${rows.map(g=>{const b=bestRun(g.list);return`<tr><td>${esc(g.name)}</td><td>${g.list.length}</td><td>${sum(g.list,'distance').toFixed(1)} km</td><td>${b?fmtPace(b.pace)+' /km':'–'}</td></tr>`}).join('')}</tbody></table></div>`:'<p class="muted">No runs yet.</p>';
+})();
+</script></body></html>

@@ -1,0 +1,36 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="css/style.css"><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script><title>Dashboard - SpeedRun Log</title></head><body>
+<div id="navbar" data-active="dashboard"></div>
+<main class="container"><div id="msg" class="msg"></div>
+<section class="hero"><h2 id="greeting">Welcome</h2><p id="sub">&nbsp;</p><a class="btn" href="timer.html">▶ Start a run</a></section>
+<div class="stats">
+<div class="stat"><div class="label">Runs</div><div class="value" id="sRuns">–</div></div>
+<div class="stat"><div class="label">Distance</div><div class="value" id="sKm">–</div></div>
+<div class="stat"><div class="label">Time</div><div class="value" id="sTime">–</div></div>
+<div class="stat"><div class="label">Best pace</div><div class="value" id="sPace">–</div></div></div>
+<h3>Last 7 days <span class="muted">(km)</span></h3><div class="bars" id="bars"></div>
+<h3 style="margin-top:36px">Recent runs</h3><div id="recent"></div></main>
+<script src="js/supabase.js"></script><script src="js/auth.js"></script><script src="js/app.js"></script><script src="js/nav.js"></script>
+<script>
+(async()=>{
+const s=await checkAuth(true);if(!s)return;
+const{data:p}=await supabase.from('profiles').select('full_name,username').eq('id',s.user.id).maybeSingle();
+const name=(p&&(p.full_name||p.username))||(s.user.user_metadata||{}).full_name||s.user.email.split('@')[0];
+const h=new Date().getHours();
+$('greeting').textContent=(h<12?'Good morning':h<18?'Good afternoon':'Good evening')+', '+name;
+const runs=await loadRuns(),best=bestRun(runs);
+$('sRuns').textContent=runs.length;
+$('sKm').innerHTML=sum(runs,'distance').toFixed(1)+' <small>km</small>';
+$('sTime').innerHTML=fmtTotal(sum(runs,'seconds'));
+$('sPace').innerHTML=best?fmtPace(best.pace)+' <small>/km</small>':'–';
+const days=new Set(runs.map(r=>r.date));let c=new Date();
+if(!days.has(ymd(c)))c.setDate(c.getDate()-1);
+let streak=0;while(days.has(ymd(c))){streak++;c.setDate(c.getDate()-1)}
+$('sub').textContent=runs.length?(streak>1?streak+'-day streak. ':'')+'You have logged '+runs.length+' run'+(runs.length===1?'':'s')+'.':'Start your first run to see your stats here.';
+const week=[];for(let i=6;i>=0;i--){const d=new Date();d.setDate(d.getDate()-i);week.push({key:ymd(d),label:d.toLocaleDateString(undefined,{weekday:'short'}),km:0})}
+runs.forEach(r=>{const w=week.find(x=>x.key===r.date);if(w)w.km+=r.distance});
+const max=Math.max(...week.map(w=>w.km),1);
+$('bars').innerHTML=week.map(w=>`<div class="bar-col" title="${esc(w.key)}: ${w.km.toFixed(1)} km"><div class="bar-val">${w.km?w.km.toFixed(1):''}</div><div class="bar ${w.km?'':'empty'}" style="height:${w.km?Math.max(w.km/max*100,4):2}%"></div><div class="bar-day">${esc(w.label)}</div></div>`).join('');
+const rec=runs.slice(0,5);
+$('recent').innerHTML=rec.length?`<div class="table-wrap"><table><thead><tr><th>Activity</th><th>Date</th><th>Distance</th><th>Time</th><th>Pace</th></tr></thead><tbody>${rec.map(r=>`<tr><td>${esc(r.name)}${best&&r.id===best.id?'<span class="tag">PB</span>':''}</td><td>${esc(fmtDate(r.date))}</td><td>${r.distance.toFixed(2)} km</td><td>${fmtClock(r.seconds)}</td><td>${fmtPace(r.pace)} /km</td></tr>`).join('')}</tbody></table></div>`:'<p class="muted">No runs yet.</p>';
+})();
+</script></body></html>

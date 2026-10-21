@@ -1,0 +1,145 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="css/style.css"><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script><title>Account settings - SpeedRun Timer Log</title>
+<style>
+.card{padding:24px;margin-bottom:20px;background:var(--surface);border:1px solid var(--line);border-radius:16px;box-shadow:var(--sh)}
+.card h3{margin:0 0 4px;font-size:1.05rem}
+.card .hint{margin:0 0 18px;color:var(--mut);font-size:.88rem}
+.avatar-row{display:flex;align-items:center;gap:18px;margin-bottom:22px}
+.avatar-lg{display:grid;place-items:center;flex:none;width:84px;height:84px;border-radius:50%;background:var(--acc);color:#fff;font-size:2rem;font-weight:700;overflow:hidden}
+.avatar-lg img{width:100%;height:100%;object-fit:cover}
+.avatar-actions{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+.avatar-actions p{flex-basis:100%;margin:2px 0 0;font-size:.8rem}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:0 16px}
+.danger-zone{border-color:#7f1d1d}
+.danger-zone h3{color:var(--bad)}
+@media(max-width:560px){.grid2{grid-template-columns:1fr}.avatar-row{flex-direction:column;align-items:flex-start}}
+</style></head><body>
+<div id="navbar" data-active="profile"></div>
+<main class="container" style="max-width:680px">
+<h2>Account settings</h2>
+
+<section class="card">
+<h3>Profile</h3><p class="hint">How you appear in SpeedRun Timer Log.</p>
+<div id="msg" class="msg"></div>
+<div class="avatar-row">
+<div class="avatar-lg" id="avatar">?</div>
+<div class="avatar-actions">
+<button type="button" class="btn-secondary" id="uploadBtn">Upload photo</button>
+<button type="button" class="link" id="removeBtn" style="display:none">Remove</button>
+<input type="file" id="file" accept="image/png,image/jpeg,image/webp" hidden>
+<p class="muted">PNG, JPG or WebP, up to 10 MB.</p>
+</div></div>
+<form onsubmit="saveProfile(event)">
+<div class="grid2">
+<div class="form-group"><label>Full name</label><input type="text" id="fullName" required></div>
+<div class="form-group"><label>Username</label><input type="text" id="username" placeholder="optional" autocomplete="username"></div>
+<div class="form-group"><label>Email</label><input type="email" id="email" readonly></div>
+<div class="form-group"><label>Member since</label><input type="text" id="since" readonly></div>
+</div>
+<button type="submit" id="saveBtn">Save changes</button></form>
+</section>
+
+<section class="card">
+<h3>Change password</h3><p class="hint">Use at least 6 characters.</p>
+<div id="msg2" class="msg"></div>
+<form onsubmit="changePassword(event)">
+<div class="grid2">
+<div class="form-group"><label>New password</label><input type="password" id="newPass" minlength="6" autocomplete="new-password" required></div>
+<div class="form-group"><label>Confirm new password</label><input type="password" id="newPass2" autocomplete="new-password" required></div>
+</div>
+<button type="submit" class="btn-secondary">Update password</button></form>
+</section>
+
+<section class="card danger-zone">
+<h3>Delete account</h3><p class="hint">Permanently deletes your account, your profile and every run. This cannot be undone.</p>
+<div id="msg3" class="msg"></div>
+<div class="form-group"><label>Type DELETE to confirm</label><input type="text" id="confirmDel" autocomplete="off"></div>
+<button type="button" class="btn-danger" onclick="deleteAccount()">Delete my account</button>
+</section>
+</main>
+<script src="js/supabase.js"></script><script src="js/auth.js"></script><script src="js/app.js"></script><script src="js/nav.js"></script>
+<script>
+let uid,avatarUrl='';
+const SETUP_HINT=' Run account-setup.sql in the Supabase SQL Editor, then try again.';
+
+function displayName(){
+  return $('fullName').value.trim()||$('username').value.trim()||$('email').value.split('@')[0]||'Account';
+}
+function paintAvatar(){
+  const a=$('avatar');a.textContent='';
+  if(avatarUrl){const i=document.createElement('img');i.src=avatarUrl;i.alt='Profile photo';a.appendChild(i)}
+  else a.textContent=displayName().charAt(0).toUpperCase()||'?';
+  $('removeBtn').style.display=avatarUrl?'inline-block':'none';
+}
+function syncNav(){if(window.setNavProfile)setNavProfile(displayName(),avatarUrl)}
+
+(async()=>{
+  const s=await checkAuth(true);if(!s)return;
+  const u=s.user,meta=u.user_metadata||{};uid=u.id;
+  $('email').value=u.email;
+  $('since').value=new Date(u.created_at).toLocaleDateString(undefined,{month:'long',day:'numeric',year:'numeric'});
+  const{data:p,error}=await supabase.from('profiles').select('full_name,username,avatar_url').eq('id',uid).maybeSingle();
+  if(error)showMessage('msg','Could not load your profile: '+error.message+'.'+SETUP_HINT);
+  $('fullName').value=(p&&p.full_name)||meta.full_name||'';
+  $('username').value=(p&&p.username)||meta.username||'';
+  avatarUrl=(p&&p.avatar_url)||meta.avatar_url||'';
+  paintAvatar();
+})();
+
+async function saveProfile(e){
+  e.preventDefault();
+  const full_name=$('fullName').value.trim(),username=$('username').value.trim();
+  if(!full_name)return showMessage('msg','Enter your full name.');
+  if(username&&!/^[A-Za-z0-9_.-]{3,30}$/.test(username))return showMessage('msg','Username must be 3-30 characters: letters, numbers, . _ -');
+  $('saveBtn').disabled=true;
+  const{data,error}=await supabase.from('profiles').upsert({id:uid,full_name,username:username||null}).select('id');
+  $('saveBtn').disabled=false;
+  if(error)return showMessage('msg',error.code==='23505'?'That username is already taken.':error.message+(/column/i.test(error.message)?SETUP_HINT:''));
+  if(!data||!data.length)return showMessage('msg','Not saved: Supabase blocked the update.'+SETUP_HINT);
+  await supabase.auth.updateUser({data:{full_name,username}});
+  paintAvatar();syncNav();
+  showMessage('msg','Profile saved.',false);
+}
+
+$('uploadBtn').addEventListener('click',()=>$('file').click());
+$('file').addEventListener('change',async e=>{
+  const f=e.target.files[0];e.target.value='';if(!f)return;
+  if(!/^image\/(png|jpeg|webp)$/.test(f.type))return showMessage('msg','Choose a PNG, JPG or WebP image.');
+  if(f.size>10*1024*1024)return showMessage('msg','Image must be under 10 MB.');
+  const path=uid+'/avatar';
+  const up=await supabase.storage.from('avatars').upload(path,f,{upsert:true,contentType:f.type,cacheControl:'3600'});
+  if(up.error)return showMessage('msg','Upload failed: '+up.error.message+'.'+SETUP_HINT);
+  const url=supabase.storage.from('avatars').getPublicUrl(path).data.publicUrl+'?v='+Date.now();
+  const r=await supabase.from('profiles').upsert({id:uid,avatar_url:url}).select('id');
+  if(r.error||!r.data||!r.data.length)return showMessage('msg','Photo uploaded but not saved to your profile.'+SETUP_HINT);
+  await supabase.auth.updateUser({data:{avatar_url:url}});
+  avatarUrl=url;paintAvatar();syncNav();
+  showMessage('msg','Photo updated.',false);
+});
+$('removeBtn').addEventListener('click',async()=>{
+  await supabase.storage.from('avatars').remove([uid+'/avatar']);
+  const r=await supabase.from('profiles').upsert({id:uid,avatar_url:null}).select('id');
+  if(r.error||!r.data||!r.data.length)return showMessage('msg',(r.error&&r.error.message)||'Could not remove the photo.');
+  await supabase.auth.updateUser({data:{avatar_url:null}});
+  avatarUrl='';paintAvatar();syncNav();
+  showMessage('msg','Photo removed.',false);
+});
+$('fullName').addEventListener('input',()=>{if(!avatarUrl)paintAvatar()});
+
+async function changePassword(e){
+  e.preventDefault();const p=$('newPass').value;
+  if(p.length<6)return showMessage('msg2','Password must be at least 6 characters.');
+  if(p!==$('newPass2').value)return showMessage('msg2','Passwords do not match.');
+  const{error}=await supabase.auth.updateUser({password:p});
+  if(error)return showMessage('msg2',error.message);
+  e.target.reset();showMessage('msg2','Password updated.',false);
+}
+
+async function deleteAccount(){
+  if($('confirmDel').value.trim()!=='DELETE')return showMessage('msg3','Type DELETE in the box to confirm.');
+  if(!confirm('Permanently delete your account and all your runs?'))return;
+  try{await supabase.storage.from('avatars').remove([uid+'/avatar'])}catch(err){}
+  const{error}=await supabase.rpc('delete_my_account');
+  if(error)return showMessage('msg3',error.message+(/function/i.test(error.message)?SETUP_HINT:''));
+  await handleLogout();
+}
+</script></body></html>

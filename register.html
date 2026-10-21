@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Create account - SpeedRun Log</title>
+  <link rel="stylesheet" href="css/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+  <div class="split">
+    <aside class="split-art">
+      <div class="brand">⚡ SpeedRun Timer Log</div>
+      <div>
+        <div class="clock" aria-hidden="true">00:00<small>.00</small></div>
+        <h1>Start tracking your runs today.</h1>
+        <p>Create a free account and save every run you time.</p>
+        <ul>
+          <li>Your runs are saved to your own account</li>
+          <li>See your totals, streak and best pace</li>
+          <li>Works on your phone and your computer</li>
+        </ul>
+      </div>
+      <div></div>
+    </aside>
+
+    <main class="split-form">
+      <div class="split-card">
+        <h2>Create your account</h2>
+        <p class="sub">It only takes a minute.</p>
+        <div id="msg" class="msg"></div>
+        <form id="regForm" novalidate>
+          <div class="form-group"><label>Full name</label><input type="text" id="fullName" placeholder="Juan Dela Cruz" autocomplete="name"></div>
+          <div class="form-group"><label>Email</label><input type="email" id="email" placeholder="you@example.com" autocomplete="email"></div>
+          <div class="form-group"><label>Password (6+ characters)</label>
+            <div class="pw"><input type="password" id="password" placeholder="Create a password" autocomplete="new-password"><button type="button" class="pw-toggle">Show</button></div>
+          </div>
+          <div class="form-group"><label>Confirm password</label><input type="password" id="confirmPassword" placeholder="Repeat your password" autocomplete="new-password"></div>
+          <button type="submit" id="btn">Create account</button>
+        </form>
+        <p class="alt">Already have an account? <a href="login.html">Log in</a></p>
+      </div>
+    </main>
+  </div>
+
+  <script src="js/supabase.js"></script>
+  <script>
+    const el = (id) => document.getElementById(id);
+
+    function say(text, isError = true) {
+      const m = el('msg');
+      m.textContent = text;
+      m.className = 'msg ' + (isError ? 'msg-error' : 'msg-success');
+      m.style.display = 'block';
+    }
+
+    function explain(err) {
+      const m = ((err && err.message) || '').toLowerCase();
+      if (m.includes('failed to fetch') || m.includes('networkerror')) return 'Cannot reach Supabase. Check your internet connection and that the project is not paused.';
+      if (m.includes('invalid api key')) return 'Invalid API key. Copy the anon/publishable key from Supabase Project Settings > API Keys into js/supabase.js.';
+      if (m.includes('invalid login')) return 'Email or password is incorrect.';
+      if (m.includes('email not confirmed')) return 'Confirm your email first (check your inbox), then log in.';
+      if (m.includes('rate limit')) return 'Too many emails sent. Wait a while, or turn off Confirm email in Supabase Auth settings while testing.';
+      if (m.includes('database error')) return 'Supabase could not create your profile row. Check the trigger on auth.users and the profiles table.';
+      return (err && err.message) || 'Something went wrong. Try again.';
+    }
+
+    function ready() {
+      try { supabase; } catch (e) {
+        say('Could not start Supabase. Check that js/supabase.js exists and you are online.');
+        return false;
+      }
+      if (SUPABASE_ANON_KEY.includes('PASTE')) {
+        say('Paste your Supabase anon key into js/supabase.js first.');
+        return false;
+      }
+      return true;
+    }
+
+    document.querySelectorAll('.pw-toggle').forEach((b) => b.addEventListener('click', () => {
+      const i = b.previousElementSibling;
+      const show = i.type === 'password';
+      i.type = show ? 'text' : 'password';
+      b.textContent = show ? 'Hide' : 'Show';
+    }));
+
+    if (ready()) checkAuth(false);
+
+    el('regForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      if (!ready()) return;
+
+      const fullName = el('fullName').value.trim();
+      const email = el('email').value.trim();
+      const password = el('password').value;
+
+      if (!fullName) return say('Enter your full name.');
+      if (!email) return say('Enter your email.');
+      if (password.length < 6) return say('Password must be at least 6 characters.');
+      if (password !== el('confirmPassword').value) return say('Passwords do not match.');
+
+      el('btn').disabled = true;
+      el('btn').textContent = 'Creating account…';
+      try {
+        const { data, error } = await supabase.auth.signUp({
+          email,
+          password,
+          options: { data: { full_name: fullName } }
+        });
+        if (error) throw error;
+
+        if (data.user && data.user.identities && data.user.identities.length === 0) {
+          throw new Error('That email is already registered. Log in instead.');
+        }
+        if (data.session) { location.href = 'dashboard.html'; return; }
+        say('Account created. Check your email to confirm it, then log in.', false);
+      } catch (err) {
+        console.error(err);
+        say(explain(err));
+      }
+      el('btn').disabled = false;
+      el('btn').textContent = 'Create account';
+    });
+  </script>
+</body>
+</html>

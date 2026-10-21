@@ -1,0 +1,33 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="css/style.css"><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script><title>History - SpeedRun Log</title></head><body>
+<div id="navbar" data-active="history"></div>
+<main class="container"><h2>Run history</h2><div id="msg" class="msg"></div>
+<div class="row"><input id="q" type="search" placeholder="Search activity or notes" style="max-width:320px" oninput="render()"><label class="muted" style="display:flex;align-items:center;gap:6px;margin:0;font-weight:400"><input type="checkbox" id="showArch" style="width:auto" onchange="saveArch();render()">Show archived</label><span class="muted" id="count"></span></div>
+<div id="list" style="margin-top:12px"></div></main>
+<script src="js/supabase.js"></script><script src="js/auth.js"></script><script src="js/app.js"></script><script src="js/nav.js"></script>
+<script>
+let runs=[],best=null;
+function saveArch(){try{localStorage.setItem('showArchived',$('showArch').checked?'1':'0')}catch(e){}}
+function loadArch(){try{$('showArch').checked=localStorage.getItem('showArchived')==='1'}catch(e){}}
+function render(){
+const q=$('q').value.toLowerCase(),sa=$('showArch').checked,pool=runs.filter(r=>sa||!r.archived),list=pool.filter(r=>(r.name+' '+r.notes).toLowerCase().includes(q));
+$('count').textContent=list.length+' of '+pool.length+' runs';
+$('list').innerHTML=list.length?`<div class="table-wrap"><table><thead><tr><th>Activity</th><th>Date</th><th>Distance</th><th>Time</th><th>Pace</th><th></th></tr></thead><tbody>${list.map(r=>`<tr${r.archived?' style="opacity:.55"':''}><td>${esc(r.name)}${best&&r.id===best.id?'<span class="tag">PB</span>':''}${r.notes?`<div class="muted" style="font-size:.82rem">${esc(r.notes)}</div>`:''}</td><td>${esc(fmtDate(r.date))}</td><td>${r.distance.toFixed(2)} km</td><td>${fmtClock(r.seconds)}</td><td>${fmtPace(r.pace)} /km</td><td style="white-space:nowrap"><button class="link" onclick="edit('${r.id}')">Edit</button><button class="link" onclick="archive('${r.id}')">${r.archived?'Restore':'Archive'}</button></td></tr>`).join('')}</tbody></table></div>`:'<p class="muted">No runs found.</p>';
+}
+async function archive(id){
+const r=runs.find(x=>x.id===id),to=!r.archived;
+if(to&&!confirm('Archive this run? You can restore it later.'))return;
+const{data,error}=await supabase.from('runs').update({archived:to}).eq('id',id).select('id');
+if(error)return showMessage('msg',error.message);
+if(!data||!data.length)return showMessage('msg','Not saved: Supabase blocked the update. Add an UPDATE policy on the runs table (see instructions).');
+r.archived=to;best=bestRun(runs.filter(x=>!x.archived));render();
+}
+async function edit(id){
+const r=runs.find(x=>x.id===id),name=prompt('Activity name',r.name);
+if(name===null||!name.trim())return;
+const notes=prompt('Notes',r.notes);if(notes===null)return;
+const{error}=await supabase.from('runs').update({activity_name:name.trim(),notes}).eq('id',id);
+if(error)return showMessage('msg',error.message);
+r.name=name.trim();r.notes=notes;render();
+}
+(async()=>{if(!await checkAuth(true))return;loadArch();runs=await loadRuns(true);best=bestRun(runs.filter(x=>!x.archived));render()})();
+</script></body></html>
